@@ -1,0 +1,7 @@
+Scripts
+__pycache__
+Include
+Lib
+*.cfg
+.vscode
+*.pkl
