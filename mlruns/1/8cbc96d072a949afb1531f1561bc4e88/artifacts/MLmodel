@@ -1,0 +1,13 @@
+artifact_path: C:/Users/a0l05iw/OneDrive - Walmart Inc/Archivos_misc/Personal/toy/aussie_rain/mlruns/1/8cbc96d072a949afb1531f1561bc4e88/artifacts
+flavors:
+  python_function:
+    env: conda.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    python_version: 3.8.8
+  sklearn:
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 0.24.1
+run_id: 8cbc96d072a949afb1531f1561bc4e88
+utc_time_created: '2021-08-04 18:31:32.389972'

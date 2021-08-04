@@ -195,7 +195,7 @@ def training_loop(data_tuple:ty.Tuple, feature_params:dict):
     logger = lg.getLogger('tracker')
     
     search_space_specs = {
-        'n_estimators':np.arange(100, 600, 100, dtype=np.int16),
+        'n_estimators':np.arange(100, 500, 100, dtype=np.int16),
         'max_depth':[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
         'n_jobs':10
     }
