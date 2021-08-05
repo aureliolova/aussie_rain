@@ -89,14 +89,15 @@ def get_data(target_col:str) -> ty.Tuple[pd.DataFrame, pd.Series]:
     return X, y
 
 #%%target treatment
-def build_encoder() -> prep.LabelEncoder:
-    return prep.LabelEncoder()
+def build_encoder() -> prep.FunctionTransformer:
+    encoding_dict = {'Yes':1, 'No':0}
+    encoder = prep.FunctionTransformer(func=encoding_dict.get)
+    return encoder
 
 def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
     encoder = build_encoder()
-    fitted_encoder = encoder.fit(target)
-    treated_target = fitted_encoder.transform(target)
-    return fitted_encoder, treated_target
+    treated_target = encoder.transform(target)
+    return encoder, treated_target
 
 #%%feature treatment
 def build_selector(columns:str):
