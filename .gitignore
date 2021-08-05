@@ -5,3 +5,4 @@ Lib
 *.cfg
 .vscode
 *.pkl
+*.ipynb
