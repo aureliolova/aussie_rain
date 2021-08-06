@@ -59,8 +59,6 @@ def read_data():
     
     if not data_col_set >= init_col_set:
         raise ValueError('the data column set contains columns not in initial column set: {}'.format(data_col_set - init_col_set))
-    elif not init_col_set >= data_col_set:
-        raise ValueError('the initial column set contains columns not in data column set: {}'.format(init_col_set - data_col_set))
     
     for col in init.DATE_COLS:
         data.loc[:, col] = pd.to_datetime(data.loc[:, col])
@@ -97,8 +95,10 @@ def build_encoder() -> prep.FunctionTransformer:
     return encoder
 
 def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
-    encoder = build_encoder()
-    treated_target = encoder.transform(target)
+    # encoder = build_encoder()
+    # treated_target = encoder.transform(target)
+    encoder = {'Yes':1, 'No':0}
+    treated_target = target.map(encoder.get).to_numpy()
     return encoder, treated_target
 
 #%%feature treatment for all
@@ -205,11 +205,12 @@ def build_regressor(**kwargs) -> ensemble.RandomForestClassifier:
 
 def build_model_pipeline(feature_pipeline:compose.ColumnTransformer, **kwargs) -> pipe.Pipeline:
     regressor = build_regressor(**kwargs)
+    regressor_params = regressor.get_params()
     model_pipeline = pipe.Pipeline(steps=[
         ('feature_engineering', feature_pipeline),
         ('classifier', regressor)
     ])
-    return model_pipeline
+    return regressor_params, model_pipeline
 
 def get_experiment(experiment_name:str) -> str:
     experiment = mlflow.get_experiment_by_name(name=experiment_name)
@@ -228,7 +229,7 @@ def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], pa
     run_name = 'RBC_' + dt.datetime.now().strftime('%y%m%d%H%M%S')
     with mlflow.start_run(experiment_id=experiment_id, run_name=run_name):
         mlflow.log_params(params=param_dict)
-        mlflow.log_params(params=classifier.get_params())
+        # mlflow.log_params(params=classifier.get_params())
         
         model = classifier.fit(X=f_train, y=t_train)
         t_pred = model.predict(f_test)
@@ -247,8 +248,8 @@ def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransforme
     logger = lg.getLogger('tracker')
     
     search_space_specs = {
-        'n_estimators':np.arange(100, 500, 100, dtype=np.int16),
-        'max_depth':[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
+        'n_estimators':500, #np.arange(100, 500, 100, dtype=np.int16),
+        'max_depth':None, #[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
         'n_jobs':10
     }
     builder = SearchSpaceBuilder(constant_keys=['n_jobs'])
@@ -256,8 +257,9 @@ def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransforme
 
     for ctr, param_dict in enumerate(search_space):
         logger.info('training model {ctr} on parameters: {pdict}'.format(ctr=ctr, pdict=str(param_dict)))
-        model = build_model_pipeline(feature_pipeline=feature_pipeline, **param_dict)
-        track_training(classifier=model, data_tuple=data_tuple, param_dict=feature_params)
+        regressor_params, model = build_model_pipeline(feature_pipeline=feature_pipeline, **param_dict)
+        full_params = {**regressor_params, **feature_params}
+        track_training(classifier=model, data_tuple=data_tuple, param_dict=full_params)
         logger.info('finished training')
 
 
@@ -271,7 +273,7 @@ def main():
     encoder, target = treat_target(y)
     logger.info('Target treated')
     
-    data_tuple = m_sel.train_test_split(x, y, test_size=0.2, random_state=42)
+    data_tuple = m_sel.train_test_split(x, target, test_size=0.2, random_state=42)
 
     logger.info('Creating feature pipeline')
     feature_param_dict = {
