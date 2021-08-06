@@ -19,6 +19,7 @@ from sklearn import model_selection as m_sel
 from sklearn import metrics
 from sklearn import impute
 from sklearn import ensemble
+from sklearn import compose
 from sklearn import base
 
 from build_search_space import SearchSpaceBuilder
@@ -100,7 +101,7 @@ def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
     treated_target = encoder.transform(target)
     return encoder, treated_target
 
-#%%feature treatment for numerics
+#%%feature treatment for all
 def build_selector(columns:str=None):
     def select_columns(data:pd.DataFrame, columns:str) -> pd.DataFrame:
         if not columns:
@@ -140,6 +141,16 @@ def build_dropper(thresh:float=0):
     dropper = prep.FunctionTransformer(func=na_col_drop, kw_args={'thresh':thresh})
     return dropper
 
+def build_generic_feature_pipeline(selector_columns:list, dropper_thresh:float=0) -> pipe.Pipeline:
+    selector = build_selector(columns=selector_columns)
+    dropper = build_dropper(thresh=dropper_thresh)
+    transformer = pipe.Pipeline(steps=[
+        ('selector', selector),
+        ('dropper', dropper)
+    ])
+    return transformer
+
+#%% numeric feature treatement
 def build_imputer(strategy:str='mean') -> impute.SimpleImputer:
     return impute.SimpleImputer(strategy=strategy)
 
@@ -147,22 +158,43 @@ def build_scaler(scaler:str='StandardScaler', **kwargs) -> base.TransformerMixin
     transformer = getattr(prep, scaler)(**kwargs)
     return transformer
 
-#%%pipelines
-
-def build_feature_pipeline(selector_columns:str=None, dropper_thresh:float=0, imputer_strategy:str='mean', scaler:str=None) -> pipe.Pipeline:
-    selector = build_selector(columns=selector_columns)
-    dropper = build_dropper(thresh=dropper_thresh)
-    imputer = build_imputer(strategy=imputer_strategy)
-    if scaler:
-        scaler = build_scaler(scaler=scaler)
-    else:
-        scaler = build_scaler()
-
-    pipeline = pipe.Pipeline(steps=[
-        ('selector', selector),
-        ('dropper', dropper),
+def build_numeric_feature_pipeline(numeric_cols:list, imputer_strategy:str='mean', scaler:str='StandardScaler', **scaler_kwargs) -> pipe.Pipeline:
+    imputer = build_imputer(imputer_strategy)
+    scaler = build_scaler(scaler, **scaler_kwargs)
+    transformer = pipe.Pipeline(steps=[
         ('imputer', imputer),
         ('scaler', scaler)
+    ])
+    return transformer
+
+#%% categorical feature treatement
+
+def build_ohe_encoder() -> prep.OneHotEncoder:
+    encoder = prep.OneHotEncoder()
+    return encoder
+
+def build_categorical_feature_pipeline(categorical_cols:list) -> pipe.Pipeline:
+    ohe_encoder = build_ohe_encoder()
+    transformer= pipe.Pipeline(steps=[
+        ('ohe', ohe_encoder)
+    ])
+    return transformer
+
+#%%pipelines
+
+def build_feature_pipeline(numeric_columns:list=list(), categorical_columns:list=list(), dropper_thresh:float=0, imputer_strategy:str='mean', scaler:str='StandardScaler') -> pipe.Pipeline:
+    selector_columns = numeric_columns + categorical_columns
+    
+    generic_feature_pipeline = build_generic_feature_pipeline(selector_columns=selector_columns, dropper_thresh=dropper_thresh)
+
+    numeric_feature_pipeline = build_numeric_feature_pipeline(numeric_cols=numeric_columns, imputer_strategy=imputer_strategy, scaler=scaler)
+
+    categorical_feature_pipeline = build_categorical_feature_pipeline(categorical_cols=categorical_columns)
+
+    pipeline = compose.ColumnTransformer(transformers=[
+        ('generic', generic_feature_pipeline, selector_columns),
+        ('numeric', numeric_feature_pipeline, numeric_columns),
+        ('categorical', categorical_feature_pipeline, categorical_columns)
     ])
     return pipeline
 
