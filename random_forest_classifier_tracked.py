@@ -19,6 +19,7 @@ from sklearn import model_selection as m_sel
 from sklearn import metrics
 from sklearn import impute
 from sklearn import ensemble
+from sklearn import base
 
 from build_search_space import SearchSpaceBuilder
 
@@ -99,9 +100,11 @@ def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
     treated_target = encoder.transform(target)
     return encoder, treated_target
 
-#%%feature treatment
-def build_selector(columns:str):
+#%%feature treatment for numerics
+def build_selector(columns:str=None):
     def select_columns(data:pd.DataFrame, columns:str) -> pd.DataFrame:
+        if not columns:
+            columns = data.columns
         return data.loc[:, columns]
     
     selector = prep.FunctionTransformer(func=select_columns, kw_args={'columns':columns})
@@ -140,18 +143,26 @@ def build_dropper(thresh:float=0):
 def build_imputer(strategy:str='mean') -> impute.SimpleImputer:
     return impute.SimpleImputer(strategy=strategy)
 
+def build_scaler(scaler:str='StandardScaler', **kwargs) -> base.TransformerMixin:
+    transformer = getattr(prep, scaler)(**kwargs)
+    return transformer
 
 #%%pipelines
 
-def build_feature_pipeline(selector_columns:str, dropper_thresh:float, imputer_strategy:str) -> pipe.Pipeline:
+def build_feature_pipeline(selector_columns:str=None, dropper_thresh:float=0, imputer_strategy:str='mean', scaler:str=None) -> pipe.Pipeline:
     selector = build_selector(columns=selector_columns)
     dropper = build_dropper(thresh=dropper_thresh)
     imputer = build_imputer(strategy=imputer_strategy)
+    if scaler:
+        scaler = build_scaler(scaler=scaler)
+    else:
+        scaler = build_scaler()
 
     pipeline = pipe.Pipeline(steps=[
         ('selector', selector),
         ('dropper', dropper),
-        ('imputer', imputer)
+        ('imputer', imputer),
+        ('scaler', scaler)
     ])
     return pipeline
 
