@@ -6,9 +6,6 @@ TARGET_COL = 'raintomorrow'
 
 CATEGORICAL_COLS = [
     'location',
-    'windgustdir',
-    'winddir9am',
-    'winddir3pm',
     'raintoday' 
 ]
 

@@ -203,6 +203,14 @@ def build_regressor(**kwargs) -> ensemble.RandomForestClassifier:
     regressor = ensemble.RandomForestClassifier(**kwargs)
     return regressor
 
+def build_model_pipeline(feature_pipeline:compose.ColumnTransformer, **kwargs) -> pipe.Pipeline:
+    regressor = build_regressor(**kwargs)
+    model_pipeline = pipe.Pipeline(steps=[
+        ('feature_engineering', feature_pipeline),
+        ('classifier', regressor)
+    ])
+    return model_pipeline
+
 def get_experiment(experiment_name:str) -> str:
     experiment = mlflow.get_experiment_by_name(name=experiment_name)
     
@@ -212,7 +220,7 @@ def get_experiment(experiment_name:str) -> str:
         experiment_id = mlflow.create_experiment(experiment_name)
     return experiment_id
 
-def track_training(classifier:ensemble.RandomForestClassifier, data_tuple:ty.Tuple[np.ndarray], param_dict:dict):
+def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], param_dict:dict):
     experiment_id = get_experiment('random_forests')
     
     f_train, f_test, t_train, t_test = data_tuple
@@ -235,7 +243,7 @@ def track_training(classifier:ensemble.RandomForestClassifier, data_tuple:ty.Tup
         mlsk.log_model(sk_model=model, artifact_path=artifact_path)
     return model
 
-def training_loop(data_tuple:ty.Tuple, feature_params:dict):
+def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransformer, feature_params:dict):
     logger = lg.getLogger('tracker')
     
     search_space_specs = {
@@ -248,8 +256,8 @@ def training_loop(data_tuple:ty.Tuple, feature_params:dict):
 
     for ctr, param_dict in enumerate(search_space):
         logger.info('training model {ctr} on parameters: {pdict}'.format(ctr=ctr, pdict=str(param_dict)))
-        regressor = build_regressor(**param_dict)
-        track_training(classifier=regressor, data_tuple=data_tuple, param_dict=feature_params)
+        model = build_model_pipeline(feature_pipeline=feature_pipeline, **param_dict)
+        track_training(classifier=model, data_tuple=data_tuple, param_dict=feature_params)
         logger.info('finished training')
 
 
@@ -262,20 +270,22 @@ def main():
     logger.info('Treating target')
     encoder, target = treat_target(y)
     logger.info('Target treated')
+    
+    data_tuple = m_sel.train_test_split(x, y, test_size=0.2, random_state=42)
 
-    logger.info('Fitting feature pipeline')
+    logger.info('Creating feature pipeline')
     feature_param_dict = {
-        'selector_columns':init.NUMERIC_COLS,
+        'numeric_columns':init.NUMERIC_COLS,
+        'categorical_columns':init.CATEGORICAL_COLS,
         'dropper_thresh':0.1,
-        'imputer_strategy':'mean'
+        'imputer_strategy':'mean',
+        'scaler':'StandardScaler'
     }
     feature_pipeline = build_feature_pipeline(**feature_param_dict)
-    features = feature_pipeline.fit_transform(x)
-    logger.info('Feature pipeline fit')
-    
+    logger.info('Feature pipeline created')
+
     logger.info('Starting training')
-    data_tuple = m_sel.train_test_split(features, target, test_size=0.2, random_state=42)
-    training_loop(data_tuple, feature_params=feature_param_dict)
+    training_loop(data_tuple, feature_pipeline=feature_pipeline, feature_params=feature_param_dict)
     logger.info('Training complete') 
 
 # %%
