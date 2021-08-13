@@ -103,7 +103,7 @@ def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
 
 #%%feature treatment for all
 def build_selector(columns:str=None):
-    def select_columns(data:pd.DataFrame, columns:str) -> pd.DataFrame:
+    def select_columns(data:pd.DataFrame, columns:str=None) -> pd.DataFrame:
         if not columns:
             columns = data.columns
         return data.loc[:, columns]
@@ -194,8 +194,10 @@ def build_feature_pipeline(numeric_columns:list=list(), categorical_columns:list
     pipeline = compose.ColumnTransformer(transformers=[
         ('generic', generic_feature_pipeline, selector_columns),
         ('numeric', numeric_feature_pipeline, numeric_columns),
-        ('categorical', categorical_feature_pipeline, categorical_columns)
-    ])
+        ('categorical', categorical_feature_pipeline, categorical_columns),
+        ('drop_categorical', 'drop', categorical_columns)],
+        remainder='drop'
+    )
     return pipeline
 
 #%%ML model
@@ -205,7 +207,7 @@ def build_regressor(**kwargs) -> ensemble.RandomForestClassifier:
 
 def build_model_pipeline(feature_pipeline:compose.ColumnTransformer, **kwargs) -> pipe.Pipeline:
     regressor = build_regressor(**kwargs)
-    regressor_params = regressor.get_params()
+    regressor_params = regressor.get_params(deep=False)
     model_pipeline = pipe.Pipeline(steps=[
         ('feature_engineering', feature_pipeline),
         ('classifier', regressor)
