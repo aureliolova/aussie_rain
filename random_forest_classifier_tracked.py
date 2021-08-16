@@ -158,9 +158,9 @@ def build_scaler(scaler:str='StandardScaler', **kwargs) -> base.TransformerMixin
     transformer = getattr(prep, scaler)(**kwargs)
     return transformer
 
-def build_numeric_feature_pipeline(numeric_cols:list, imputer_strategy:str='mean', scaler:str='StandardScaler', **scaler_kwargs) -> pipe.Pipeline:
+def build_numeric_feature_pipeline(imputer_strategy:str='mean', scaler:str='StandardScaler') -> pipe.Pipeline:
     imputer = build_imputer(imputer_strategy)
-    scaler = build_scaler(scaler, **scaler_kwargs)
+    scaler = build_scaler(scaler)
     transformer = pipe.Pipeline(steps=[
         ('imputer', imputer),
         ('scaler', scaler)
@@ -170,10 +170,10 @@ def build_numeric_feature_pipeline(numeric_cols:list, imputer_strategy:str='mean
 #%% categorical feature treatement
 
 def build_ohe_encoder() -> prep.OneHotEncoder:
-    encoder = prep.OneHotEncoder()
+    encoder = prep.OneHotEncoder(sparse=False)
     return encoder
 
-def build_categorical_feature_pipeline(categorical_cols:list) -> pipe.Pipeline:
+def build_categorical_feature_pipeline() -> pipe.Pipeline:
     ohe_encoder = build_ohe_encoder()
     transformer= pipe.Pipeline(steps=[
         ('ohe', ohe_encoder)
@@ -182,22 +182,30 @@ def build_categorical_feature_pipeline(categorical_cols:list) -> pipe.Pipeline:
 
 #%%pipelines
 
+def build_feature_transformer(numeric_columns:list, categorical_columns:list, imputer_strategy:str, scaler:str) -> compose.ColumnTransformer:
+    numeric_pipeline = build_numeric_feature_pipeline(imputer_strategy=imputer_strategy, scaler=scaler)
+    numeric_selector = compose.make_column_selector(dtype_include=np.number)
+
+    categorical_pipeline = build_categorical_feature_pipeline()
+    categorical_selector = compose.make_column_selector(dtype_exclude=np.number)
+
+    feature_transformer = compose.ColumnTransformer(transformers=[
+        ('numeric', numeric_pipeline, numeric_selector),
+        ('categorical', categorical_pipeline, categorical_selector)],
+        remainder='drop'
+    )
+    return feature_transformer
+
 def build_feature_pipeline(numeric_columns:list=list(), categorical_columns:list=list(), dropper_thresh:float=0, imputer_strategy:str='mean', scaler:str='StandardScaler') -> pipe.Pipeline:
     selector_columns = numeric_columns + categorical_columns
     
     generic_feature_pipeline = build_generic_feature_pipeline(selector_columns=selector_columns, dropper_thresh=dropper_thresh)
 
-    numeric_feature_pipeline = build_numeric_feature_pipeline(numeric_cols=numeric_columns, imputer_strategy=imputer_strategy, scaler=scaler)
-
-    categorical_feature_pipeline = build_categorical_feature_pipeline(categorical_cols=categorical_columns)
-
-    pipeline = compose.ColumnTransformer(transformers=[
-        ('generic', generic_feature_pipeline, selector_columns),
-        ('numeric', numeric_feature_pipeline, numeric_columns),
-        ('categorical', categorical_feature_pipeline, categorical_columns),
-        ('drop_categorical', 'drop', categorical_columns)],
-        remainder='drop'
-    )
+    feature_transformer = build_feature_transformer(numeric_columns=numeric_columns, categorical_columns=categorical_columns, imputer_strategy=imputer_strategy, scaler=scaler)
+    pipeline = pipe.Pipeline(steps=[
+        ('generic', generic_feature_pipeline),
+        ('transform', feature_transformer)
+    ])
     return pipeline
 
 #%%ML model
