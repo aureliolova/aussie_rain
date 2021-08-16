@@ -236,7 +236,7 @@ def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], pa
     
     f_train, f_test, t_train, t_test = data_tuple
 
-    run_name = 'RBC_' + dt.datetime.now().strftime('%y%m%d%H%M%S')
+    run_name = 'RFC_OHE_' + dt.datetime.now().strftime('%y%m%d%H%M%S')
     with mlflow.start_run(experiment_id=experiment_id, run_name=run_name):
         mlflow.log_params(params=param_dict)
         # mlflow.log_params(params=classifier.get_params())
@@ -258,8 +258,8 @@ def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransforme
     logger = lg.getLogger('tracker')
     
     search_space_specs = {
-        'n_estimators':500, #np.arange(100, 500, 100, dtype=np.int16),
-        'max_depth':None, #[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
+        'n_estimators': np.arange(100, 500, 100, dtype=np.int16),
+        'max_depth': [None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
         'n_jobs':10
     }
     builder = SearchSpaceBuilder(constant_keys=['n_jobs'])
