@@ -8,6 +8,7 @@ import typing as ty
 import math
 import copy
 import time
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -47,6 +48,11 @@ def set_up_tracking_logger(log_file:str=None, log_level=lg.INFO) -> lg.Logger:
         logger.handlers.clear()
     logger.addHandler(handler)
     return logger
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--run_prefix', type=str, default='RFC_', help='Prefix to identify runs.')
+    return parser
 
 #%%
 def read_data():
@@ -231,12 +237,12 @@ def get_experiment(experiment_name:str) -> str:
         experiment_id = mlflow.create_experiment(experiment_name)
     return experiment_id
 
-def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], param_dict:dict):
+def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], param_dict:dict, prefix:str):
     experiment_id = get_experiment('random_forests')
     
     f_train, f_test, t_train, t_test = data_tuple
 
-    run_name = 'RFC_OHE_' + dt.datetime.now().strftime('%y%m%d%H%M%S')
+    run_name = prefix + dt.datetime.now().strftime('%y%m%d%H%M%S')
     with mlflow.start_run(experiment_id=experiment_id, run_name=run_name):
         mlflow.log_params(params=param_dict)
         # mlflow.log_params(params=classifier.get_params())
@@ -254,12 +260,12 @@ def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], pa
         mlsk.log_model(sk_model=model, artifact_path=artifact_path)
     return model
 
-def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransformer, feature_params:dict):
+def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransformer, feature_params:dict, prefix:str):
     logger = lg.getLogger('tracker')
     
     search_space_specs = {
-        'n_estimators': np.arange(100, 500, 100, dtype=np.int16),
-        'max_depth': [None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
+        'n_estimators': None, #np.arange(100, 500, 100, dtype=np.int16),
+        'max_depth': None, #[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
         'n_jobs':10
     }
     builder = SearchSpaceBuilder(constant_keys=['n_jobs'])
@@ -269,7 +275,7 @@ def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransforme
         logger.info('training model {ctr} on parameters: {pdict}'.format(ctr=ctr, pdict=str(param_dict)))
         regressor_params, model = build_model_pipeline(feature_pipeline=feature_pipeline, **param_dict)
         full_params = {**regressor_params, **feature_params}
-        track_training(classifier=model, data_tuple=data_tuple, param_dict=full_params)
+        track_training(classifier=model, data_tuple=data_tuple, param_dict=full_params, prefix=prefix)
         logger.info('finished training')
 
 
@@ -277,6 +283,9 @@ def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransforme
 # %%
 def main():
     logger = set_up_tracking_logger()
+    parser = build_parser()
+    args = parser.parse_args()
+    
     x, y = get_data(target_col=init.TARGET_COL)
 
     logger.info('Treating target')
@@ -297,7 +306,7 @@ def main():
     logger.info('Feature pipeline created')
 
     logger.info('Starting training')
-    training_loop(data_tuple, feature_pipeline=feature_pipeline, feature_params=feature_param_dict)
+    training_loop(data_tuple, feature_pipeline=feature_pipeline, feature_params=feature_param_dict, prefix=args.run_prefix)
     logger.info('Training complete') 
 
 # %%
