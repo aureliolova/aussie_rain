@@ -16,7 +16,7 @@ class SearchSpaceBuilder:
         else:
             return [val]
 
-    def build(self, param_dict:dict) -> ty.Tuple:
+    def build(self, param_dict:dict) -> ty.Generator[ty.Tuple, None, None]:
         keys = param_dict.keys()
         vals = list(map(lambda pair: self.turn_into_list(*pair), param_dict.items()))
         product_space = itools.product(*vals)
