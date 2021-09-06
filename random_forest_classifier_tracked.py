@@ -215,18 +215,29 @@ def build_feature_pipeline(numeric_columns:list=list(), categorical_columns:list
     return pipeline
 
 #%%ML model
-def build_regressor(**kwargs) -> ensemble.RandomForestClassifier:
-    regressor = ensemble.RandomForestClassifier(**kwargs)
-    return regressor
+def treat_param_dict_cv(param_dict_cv:dict) -> dict:
+    check_type = lambda val: isinstance(val, list) or isinstance(val, tuple)
+    treated_dict = {key:[val] if not check_type(val) else val for key, val in param_dict_cv.items()}
+    return treated_dict
 
-def build_model_pipeline(feature_pipeline:compose.ColumnTransformer, **kwargs) -> pipe.Pipeline:
-    regressor = build_regressor(**kwargs)
-    regressor_params = regressor.get_params(deep=False)
+
+def build_regressor(**kwargs) -> ensemble.RandomForestClassifier:
+    estimator = ensemble.RandomForestClassifier(**kwargs)
+    return estimator
+
+def build_cv_search_model(estimator:base.BaseEstimator, param_dict_cv:dict) -> m_sel.GridSearchCV:
+    param_dict_cv = treat_param_dict_cv(param_dict_cv)
+    cv = m_sel.GridSearchCV(estimator=estimator, param_grid=param_dict_cv)
+    return cv
+
+def build_model_pipeline(feature_pipeline:compose.ColumnTransformer, param_dict_cv:dict, **kwargs) -> pipe.Pipeline:
+    estimator = build_regressor(**kwargs)
+    model = build_cv_search_model(estimator=estimator, param_dict_cv=param_dict_cv)
     model_pipeline = pipe.Pipeline(steps=[
         ('feature_engineering', feature_pipeline),
-        ('classifier', regressor)
+        ('classifier', model)
     ])
-    return regressor_params, model_pipeline
+    return model_pipeline
 
 def get_experiment(experiment_name:str) -> str:
     experiment = mlflow.get_experiment_by_name(name=experiment_name)
@@ -248,6 +259,7 @@ def track_training(classifier:pipe.Pipeline, data_tuple:ty.Tuple[np.ndarray], pa
         # mlflow.log_params(params=classifier.get_params())
         
         model = classifier.fit(X=f_train, y=t_train)
+
         t_pred = model.predict(f_test)
 
         metric_dict = {
@@ -264,17 +276,18 @@ def training_loop(data_tuple:ty.Tuple, feature_pipeline:compose.ColumnTransforme
     logger = lg.getLogger('tracker')
     
     search_space_specs = {
-        'n_estimators': None, #np.arange(100, 500, 100, dtype=np.int16),
-        'max_depth': None, #[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
+        'n_estimators': [[100, 150, 200], [150, 200, 250]], #np.arange(100, 500, 100, dtype=np.int16),
+        'max_depth': [10, 20, 30], #[None] + np.arange(100, 350, 50, dtype=np.int16).tolist(),
         'n_jobs':10
     }
     builder = SearchSpaceBuilder(constant_keys=['n_jobs'])
     search_space = builder.build(search_space_specs)
 
+
     for ctr, param_dict in enumerate(search_space):
         logger.info('training model {ctr} on parameters: {pdict}'.format(ctr=ctr, pdict=str(param_dict)))
-        regressor_params, model = build_model_pipeline(feature_pipeline=feature_pipeline, **param_dict)
-        full_params = {**regressor_params, **feature_params}
+        model = build_model_pipeline(feature_pipeline=feature_pipeline, param_dict_cv=param_dict)
+        full_params = feature_params
         track_training(classifier=model, data_tuple=data_tuple, param_dict=full_params, prefix=prefix)
         logger.info('finished training')
 
