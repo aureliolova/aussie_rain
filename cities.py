@@ -58,6 +58,7 @@ def compute_distance(data:pd.DataFrame, x_y_cols:list) -> pd.DataFrame:
 def _select_top(grouped_data:pd.DataFrame, top:int) -> pd.DataFrame:
     sorted_data = grouped_data.sort_values(by=['location', 'dist'], ascending=True)
     selected_data = sorted_data.iloc[1:top+1, :]
+    selected_data.loc[:, 'top_label'] = ['top_{}'.format(x) for x in range(1, top+1)]
     return selected_data
 
 def select_top(data:pd.DataFrame, top:int=3) -> pd.DataFrame:
