@@ -108,6 +108,16 @@ def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
     return encoder, treated_target
 
 #%%feature treatment for all
+
+def build_adjacent_aggregator(adjacent_data:pd.DataFrame, adjacent_features:list) -> prep.FunctionTransformer:
+    
+    def add_location(data:pd.DataFrame, adjacent_data:pd.DataFrame, adjacent_features:list) -> pd.DataFrame:
+        adjacent_data = adjacent_data.loc[:, ['location', 'location_cmp']]
+        
+        adjacent_merge = pd.merge(left=data, right=adjacent_data, on='location', how='left')
+        adjacent_merge = adjacent_merge.loc[:, ['location', 'location_cmp'] + adjacent_features]
+
+
 def build_selector(columns:str=None):
     def select_columns(data:pd.DataFrame, columns:str=None) -> pd.DataFrame:
         if not columns:
