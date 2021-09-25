@@ -1,4 +1,7 @@
 #%%
+import re
+
+from geopy.geocoders import Nominatim
 import pandas as pd
 import numpy as np
 
@@ -10,28 +13,39 @@ DATASET_NAME = 'weatherAUS.csv'
 
 def get_data(filename:str) -> pd.DataFrame:
     raw_data = pd.read_csv(filename)
+    raw_data.columns = [col.lower().replace(' ', '') for col in raw_data.columns]
     return raw_data
 
-def format_data(data:pd.DataFrame, columns:list) -> pd.DataFrame:
-    data.columns = [col.lower() for col in data.columns]
-    data = data.loc[:, columns]
-    data.rename(columns={'city':'location'}, inplace=True)
-    return data
+def get_cities(filename:str) -> list:
+    raw_data = get_data(filename)
+    raw_cities = raw_data.loc[:, 'location'].unique()
 
-def subset_to_dataset(loc_data:pd.DataFrame) -> pd.DataFrame:
-    feature_dataset = pd.read_csv(DATASET_NAME)
-    feature_dataset.columns = [col.lower() for col in feature_dataset.columns]
-    location_data = feature_dataset.loc[:, ['location']].drop_duplicates()
-    subset_data = pd.merge(left=loc_data, right=location_data, on=['location'], how='inner')
-    return subset_data
+    name_regex = re.compile('[A-Z]+[a-z]*')
+    format_function = lambda name: ' '.join(name_regex.findall(name))
+    formatted_cities = list(map(format_function, raw_cities))
+    return formatted_cities
 
+def create_geoframe(city_list:list) -> pd.DataFrame:
+    locator = Nominatim(user_agent='aussie')
+    geo_function = lambda city: locator.geocode(city + ', Australia')
+    geocodes = list(map(geo_function, city_list))
+    
+    city_names = [name.replace(' ', '') for name in city_list]
+    latitudes = [geocode.latitude for geocode in geocodes]
+    longitudes = [geocode.longitude for geocode in geocodes]
 
+    geoframe = pd.DataFrame({
+        'location':city_names,
+        'lat':latitudes,
+        'lng':longitudes
+    })
+    return geoframe
+#%%
 def get_city_data():
-    raw_data = get_data(CITIES_NAME)
-    data = format_data(data=raw_data, columns=SELECTED_COLUMNS)
-    subset_data = subset_to_dataset(loc_data=data)
-    return subset_data
-
+    cities = get_cities(DATASET_NAME)
+    city_data = create_geoframe(cities)
+    return city_data
+    
 def cross_join(loc_data:pd.DataFrame) -> pd.DataFrame:
     cmp_data = loc_data.copy()
     cmp_data.columns = ['{}_cmp'.format(col) for col in cmp_data.columns]
