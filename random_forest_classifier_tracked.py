@@ -112,11 +112,22 @@ def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
 def build_adjacent_aggregator(adjacent_data:pd.DataFrame, adjacent_features:list) -> prep.FunctionTransformer:
     
     def add_location(data:pd.DataFrame, adjacent_data:pd.DataFrame, adjacent_features:list) -> pd.DataFrame:
-        adjacent_data = adjacent_data.loc[:, ['location', 'location_cmp']]
+        adjacent_data = adjacent_data.loc[:, ['location', 'location_cmp', 'top_label']]
         
-        adjacent_merge = pd.merge(left=data, right=adjacent_data, on='location', how='left')
-        adjacent_merge = adjacent_merge.loc[:, ['location', 'location_cmp'] + adjacent_features]
-
+        adjacent_merge = pd.merge(left=data, right=adjacent_data, on='location', how='inner')
+        adjacent_select = adjacent_merge.loc[:, ['date', 'location', 'top_label'] + adjacent_features]
+        adjacent_pivot = (
+            adjacent_select
+            .pivot(columns=['top_label'], index=['location', 'date'])
+        )
+        adjacent_pivot.columns = adjacent_pivot.columns.to_flat_index()
+        adjacent_pivot.reset_index(inplace=True)
+        
+        agg_data = pd.merge(left=data, right=adjacent_pivot, how='inner', on=['location', 'date'])
+        return agg_data
+    
+    adjacent_aggregator = prep.FunctionTransformer(func=add_location, kw_args={'adjacent_data':adjacent_data, 'adjacent_features':adjacent_features})
+    return adjacent_aggregator
 
 def build_selector(columns:str=None):
     def select_columns(data:pd.DataFrame, columns:str=None) -> pd.DataFrame:
