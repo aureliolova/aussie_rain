@@ -28,3 +28,9 @@ NUMERIC_COLS = [
     'temp9am',
     'temp3pm',
 ]
+
+ADJACENT_DATA_PATH = 'loc_relation.csv'
+
+ADJACENT_FEATURES = [
+    'raintoday'
+]

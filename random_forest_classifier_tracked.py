@@ -109,9 +109,11 @@ def treat_target(target:pd.Series) -> ty.Tuple[prep.LabelEncoder, np.ndarray]:
 
 #%%feature treatment for all
 
-def build_adjacent_aggregator(adjacent_data:pd.DataFrame, adjacent_features:list) -> prep.FunctionTransformer:
-    
-    def add_location(data:pd.DataFrame, adjacent_data:pd.DataFrame, adjacent_features:list) -> pd.DataFrame:
+def build_adjacent_aggregator() -> prep.FunctionTransformer:
+    adjacent_data = pd.read_csv(init.ADJACENT_DATA_PATH)
+    adjacent_features = init.ADJACENT_FEATURES
+
+    def add_adjacent_features(data:pd.DataFrame, adjacent_data:pd.DataFrame, adjacent_features:list) -> pd.DataFrame:
         adjacent_data = adjacent_data.loc[:, ['location', 'location_cmp', 'top_label']]
         
         adjacent_merge = pd.merge(left=data, right=adjacent_data, on='location', how='inner')
@@ -126,7 +128,7 @@ def build_adjacent_aggregator(adjacent_data:pd.DataFrame, adjacent_features:list
         agg_data = pd.merge(left=data, right=adjacent_pivot, how='inner', on=['location', 'date'])
         return agg_data
     
-    adjacent_aggregator = prep.FunctionTransformer(func=add_location, kw_args={'adjacent_data':adjacent_data, 'adjacent_features':adjacent_features})
+    adjacent_aggregator = prep.FunctionTransformer(func=add_adjacent_features, kw_args={'adjacent_data':adjacent_data, 'adjacent_features':adjacent_features})
     return adjacent_aggregator
 
 def build_selector(columns:str=None):
@@ -171,9 +173,11 @@ def build_dropper(thresh:float=0):
 def build_generic_feature_pipeline(selector_columns:list, dropper_thresh:float=0) -> pipe.Pipeline:
     selector = build_selector(columns=selector_columns)
     dropper = build_dropper(thresh=dropper_thresh)
+    aggregator = build_adjacent_aggregator()
     transformer = pipe.Pipeline(steps=[
         ('selector', selector),
-        ('dropper', dropper)
+        ('dropper', dropper),
+        ('aggregator', aggregator)
     ])
     return transformer
 
@@ -214,7 +218,7 @@ def build_feature_transformer(numeric_columns:list, categorical_columns:list, im
     numeric_selector = compose.make_column_selector(dtype_include=np.number)
 
     categorical_pipeline = build_categorical_feature_pipeline()
-    categorical_selector = compose.make_column_selector(dtype_exclude=np.number)
+    categorical_selector = compose.make_column_selector(dtype_exclude=[np.number, np.datetime64])
 
     feature_transformer = compose.ColumnTransformer(transformers=[
         ('numeric', numeric_pipeline, numeric_selector),
@@ -223,8 +227,8 @@ def build_feature_transformer(numeric_columns:list, categorical_columns:list, im
     )
     return feature_transformer
 
-def build_feature_pipeline(numeric_columns:list=list(), categorical_columns:list=list(), dropper_thresh:float=0, imputer_strategy:str='mean', scaler:str='StandardScaler') -> pipe.Pipeline:
-    selector_columns = numeric_columns + categorical_columns
+def build_feature_pipeline(numeric_columns:list=list(), categorical_columns:list=list(), other_columns:list=list(), dropper_thresh:float=0, imputer_strategy:str='mean', scaler:str='StandardScaler') -> pipe.Pipeline:
+    selector_columns = numeric_columns + categorical_columns + other_columns
     
     generic_feature_pipeline = build_generic_feature_pipeline(selector_columns=selector_columns, dropper_thresh=dropper_thresh)
 
@@ -332,6 +336,7 @@ def main():
     feature_param_dict = {
         'numeric_columns':init.NUMERIC_COLS,
         'categorical_columns':init.CATEGORICAL_COLS,
+        'other_columns':init.DATE_COLS,
         'dropper_thresh':0.1,
         'imputer_strategy':'mean',
         'scaler':'StandardScaler'
