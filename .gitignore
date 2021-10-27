@@ -6,3 +6,4 @@ Lib
 .vscode
 *.pkl
 .ipynb_checkpoints
+scratch*
